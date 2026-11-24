@@ -1,27 +1,31 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
+from google import genai
 import os
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "hasan_ai_verify_2026")
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
     return "HASAN AI SERVER ONLINE"
 
-@app.route("/webhook", methods=["GET"])
-def verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
+@app.route("/ask", methods=["POST"])
+def ask():
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge, 200
+    if not message:
+        return jsonify({"error": "Message required"}), 400
 
-    return "Verification failed", 403
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"You are HASAN AI. Reply naturally and briefly. User: {message}"
+        )
+        return jsonify({"reply": response.text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json(silent=True)
-    print("Instagram event:", data, flush=True)
-    return "EVENT_RECEIVED", 200
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
